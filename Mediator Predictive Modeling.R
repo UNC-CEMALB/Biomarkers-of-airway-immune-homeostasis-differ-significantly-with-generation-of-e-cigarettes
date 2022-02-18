@@ -1,0 +1,357 @@
+rm(list = ls(all.names = TRUE)) # clears global environ.
+
+# If needed, install and load packages
+library(readxl) # for data import 
+library(tidyverse) # for data organization
+library(glmnet) # for feature selection
+library(leaps) # for feature selection
+library(pheatmap) # for heatmap
+library(viridis) # for heatmap
+library(MASS) # for QDA
+select <- dplyr::select # dplyr and MASS have a name clash around the word select
+library(klaR) # for QDA
+library(caret) # for QDA
+library(randomForest) # for QDA
+library(nnet) # for multinomial regression
+
+##############################################################
+####### 1. Data preprocessing
+##############################################################
+
+# SPUTUM MEDIATOR DATA
+
+# Import data table as data frame and make Subject IDs row labels.
+MediatorData <- data.frame(read_excel("Input Data/2021_06_29 IS Project Mediators.xlsx"))
+MediatorData_Devices <- data.frame(MediatorData$Device, row.names = MediatorData$Subject_ID)
+colnames(MediatorData_Devices) <- "Device"
+MediatorData <- data.frame(MediatorData[ , 2:47], row.names = MediatorData$Subject_ID)
+
+# Count how many are zeroes for each column (informational purposes only)
+zeroes <- data.frame(colSums(MediatorData == 0)/103*100)
+names(zeroes)[1] <- 'PercUndet'
+zeroes <- zeroes[order(-zeroes$PercUndet), , drop = FALSE]
+
+# Filter out mediators that were detected in fewer than 25 subjects (~25% of the cohort, since we have four groups).
+MediatorData <- MediatorData[, which(as.numeric(colSums(MediatorData != 0)) > 25)]
+
+# Impute zeroes as the sqrt of the lowest value in that column.
+MediatorData <- as.data.frame(apply(MediatorData[ , 2:44], 2, function(x) replace(x, x == 0, sqrt(min(x[x>0])))))
+
+# METADATA
+
+# Importing metadata file and merging with devices. Kept only sex, race, and age as these were significantly different between the device groups.
+MetaData <- data.frame(read_excel("Input Data/2021_07_15 IS Project Metadata.xlsx"))
+MetaData <- data.frame(MetaData[ , 2:6], row.names = MetaData$Subject_ID)
+MetaData <- subset(MetaData, select =c ("Sex", "Race", "Age")) # These covariates were significantly different between the exposure groups (by Chi squared or ANOVA)
+MetaData[MetaData == "MO" | MetaData == "API" | MetaData == "B"] <- "NW" # Collapsed race into white and non-white because groups not sufficiently large to divide more
+MetaData <- transform(merge(MediatorData_Devices, MetaData, by=0 ,all=TRUE), row.names=Row.names, Row.names=NULL)
+
+##############################################################
+####### 2. Feature Selection with Best Subsets Method
+##############################################################
+
+# MEDIATORS ONLY
+
+# Add groups into data frame
+MediatorData <- transform(merge(MediatorData_Devices, MediatorData, by=0 ,all=TRUE), row.names=Row.names, Row.names=NULL)
+
+# Make sure separating variable is a factor (needed for QDA)
+MediatorData$Device <- factor(MediatorData$Device, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen"))
+
+# Run best subsets regression
+models <- regsubsets(Device~., data = MediatorData, nvmax = 9)
+summary(models)
+
+# We need to choose which model maximizes R squared and minimizes regression model error terms such as residual sum of squares, Mallow's Cp, and BIC
+res.sum <- summary(models)
+data.frame(
+  Adj.R2 = which.max(res.sum$adjr2),
+  CP = which.min(res.sum$cp),
+  BIC = which.min(res.sum$bic)
+) 
+
+# These plots demonstrate the number of predictors that could be best to optimize various parameters
+# creating 2 x 2 matrix for graphs
+par(mar=c(4, 4.1, 2, 2.1), mfrow = c(2,2))
+# plotting residual sum of squares
+plot(res.sum$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+# plotting adjusted R squared with a point indicating where adjusted R squared reaches maximum
+plot(res.sum$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(which.max(res.sum$adjr2), res.sum$adjr2[which.max(res.sum$adjr2)], col ="red", cex = 2, pch = 20)
+# plotting Cp with a point indicating where Cp reaches minimum
+plot(res.sum$cp, xlab = "Number of Variables", ylab = "Cp", type = "l")
+points(which.min(res.sum$cp), res.sum$cp[which.min(res.sum$cp)], col = "red", cex = 2, pch = 20)
+# plotting BC with a point indicating where BIC reaches minimum
+plot(res.sum$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+points(which.min(res.sum$bic), res.sum$bic[which.min(res.sum$bic)], col = "red", cex = 2, pch = 20)
+dev.off()
+
+# To see the 10 predictors selected
+coef(models, 9)
+
+#vector of 11 predictors function suggests to keep
+best_subsets_predictors_MD = c("IL6", "MMP9", "MPO", "IL10", "Eotaxin3", "MIP1a", "TARC", "Tie2", "VEGFD")
+
+# final dataset after feature selection using best subsets
+MediatorData = data.frame(Device = MediatorData$Device, MediatorData[,colnames(MediatorData) %in% best_subsets_predictors_MD])
+MediatorData$Device <- factor(MediatorData$Device, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen"))
+
+##############################################################
+####### 3. Heatmap
+##############################################################
+
+# Summarize means of data
+MediatorDataSummary <- MediatorData %>% group_by(Device) %>% summarize(across(everything(), mean))
+MediatorDataSummary <- data.frame(MediatorDataSummary[,-1], row.names = MediatorDataSummary$Device)
+
+# Make heat map
+dev.off()
+
+pdf("Output Figures/SummaryHeatmapMLMediators.pdf",
+    colormodel = "cmyk")
+
+heatmap <-pheatmap(t(MediatorDataSummary),
+         color = viridis(100),
+         angle_col = 0,
+         border_color = "black",
+         treeheight_col = 20,
+         treeheight_row = 20,
+         cellwidth = 50,
+         cellheight = 25,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         scale = 'row')
+
+dev.off()
+
+# View heatmap
+heatmap
+
+##############################################################
+####### 4. Prepare data for logistic regression and QDA
+##############################################################
+
+# Mediator + Device + Covariates (MDC)
+MDC <- transform(merge(MetaData, MediatorData[2:10], by=0 ,all=TRUE), row.names=Row.names, Row.names=NULL)
+
+MDC = MDC %>%
+  mutate(Sex = ifelse(Sex == 'M', 0, 
+                      ifelse(Sex == 'F', 1, NA)))
+
+MDC = MDC %>%
+  mutate(Race = ifelse(Race == 'W', 0, 
+                       ifelse(Race == 'NW', 1, NA)))
+
+
+MDC$Device <- factor(MDC$Device, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen"))
+
+##############################################################
+####### 5. Function for 4 Group Classification Model
+##############################################################
+
+# This function takes input data and a method selection (0 = QDA, 1 = multinomial regression) and is intended for data with more than 2 classes
+classification <- function(data, method) {
+  # Subset data into training and testing subsets
+  set.seed(8016)
+  
+  # doing a 5 fold cross validation (CV) and averaging prediction results after
+  # this is done, so our results aren't so heavily determined by the randomness in which the data was split
+  trainIndex = createFolds(data$Device, k = 5)
+  
+  #creating empty dataframes to store values
+  overall_df = data.frame()
+  by_class_df = data.frame()
+  per_class_accuracies = data.frame()
+  overall_metrics_df = data.frame()
+  
+  for (i in 1:length(trainIndex)){
+    train = data[-trainIndex[[i]],]
+    test = data[trainIndex[[i]],]
+    
+    # Train data with selected function
+    frmla <-as.formula(paste0(names(data)[1], "~", paste0("`", names(data[2:ncol(data)]), "`", collapse="+"), sep = ""))
+    
+    if (method == 0) { MediatorData <- train(frmla, data = train, method = "qda") } 
+    
+    else { MediatorData <- multinom(frmla, data = train) }
+    
+    # predicting device group on test set
+    test$pred_device = predict(MediatorData, newdata = test) 
+    
+    # getting results from the confusion matrix 
+    matrix = confusionMatrix(data = test$pred_device, reference = test$Device) 
+    
+    # getting overall accuracy 
+    # accuracy tells us how many device groups were correctly predicted out of the total number of predictions
+    overall_df = rbind(overall_df, matrix$overall[1])
+    
+    #getting metrics by class (sens, spec, PPV, NPV)
+    by_class_df = rbind(by_class_df, matrix$byClass[,1:4])
+    
+    #getting per class accuracies
+    per_class_accuracy <- rep(NA, length(levels(test$Device)))
+    for(j in 1:length(per_class_accuracy)){
+      per_class_accuracy[j] <- 
+        test %>%
+        filter(Device == levels(Device)[j]) %>%
+        summarise(accuracy = sum(pred_device == levels(Device)[j])/n()) %>%
+        unlist()
+      
+      accuracy_vector = c(i, levels(test$Device)[j], as.numeric(per_class_accuracy[j]))
+      per_class_accuracies = data.frame(rbind(per_class_accuracies, accuracy_vector))
+    }
+    
+  }
+  
+  #adding col names 
+  names(overall_df) = c("Accuracy")
+  colnames(per_class_accuracies) = c("K Fold Number","Device", "Accuracy")
+  
+  #adding a device column need to drop the "Class: " in front of the device names
+  by_class_df$Device = rep(rownames(by_class_df)[1:4], length(by_class_df$Sensitivity)/4)
+  rownames(by_class_df) = NULL
+  by_class_df = by_class_df %>%
+    separate(Device, c(NA, "Device"), sep = ": ")
+  
+  #now averaging those values across the 5 folds for overall and per class outputs
+  overall_df = overall_df %>%
+    dplyr::summarize(Avg_Accuracy = mean(Accuracy))
+  
+  overall_metrics_df = by_class_df %>%
+    dplyr::summarize(Avg_Sens = mean(Sensitivity), Avg_Spec = mean(Specificity), Avg_PPV = mean(`Pos Pred Value`), 
+                     Avg_NPV = mean(`Neg Pred Value`))
+  
+  by_class_df = by_class_df %>%
+    group_by(Device) %>%
+    dplyr::summarize(Avg_Sens = mean(Sensitivity), Avg_Spec = mean(Specificity), Avg_PPV = mean(`Pos Pred Value`), 
+                     Avg_NPV = mean(`Neg Pred Value`))
+  
+  #need to change the columns to numeric before averaging
+  per_class_accuracies$Accuracy = as.numeric(per_class_accuracies$Accuracy)
+  per_class_accuracies = per_class_accuracies %>%
+    group_by(Device) %>%
+    dplyr::summarize(Avg_Accuracy = mean(Accuracy))
+  
+  #viewing results
+  overall_df
+  by_class_df
+  per_class_accuracies
+  overall_metrics_df
+  
+  # merge metrics for cleaner output and reorder tibble output
+  overall <- transform(merge(overall_df, overall_metrics_df, by=0 ,all=TRUE), row.names=Row.names, Row.names=NULL)
+  overall <- overall %>% rowwise() %>% mutate(BalancedAcc = mean(c(Avg_Sens, Avg_Spec), na.rm =T))
+  
+  byclass <- transform(merge(per_class_accuracies, by_class_df, by=1 ,all=TRUE))
+  byclass <- byclass %>% rowwise() %>% mutate(BalancedAcc = mean(c(Avg_Sens, Avg_Spec), na.rm =T))
+  
+  list <- list("Overall Performance" = overall, 
+                 "By Class Performance" = byclass %>%
+                   arrange(match(Device, c("NS/NV", "SM", "3rd Gen", "4th Gen")), desc(Device)))
+  
+  df1 <- data.frame(list$`Overall Performance`)
+  df2 <- data.frame(list$`By Class Performance`)
+  df3 <- data.frame(bind_rows(df2, df1))
+  df3$Device[is.na(df3$Device)]<-"Overall"
+  
+  output <- data.frame(df3[2:7], row.names = df3$Device)
+  output <- round(output, digits = 4)
+  output
+
+}
+
+
+##############################################################
+####### 6. Apply functions to our data
+##############################################################
+
+# MEDIATOR DATA ONLY
+
+MD_qda <- classification(MediatorData, 0)
+MDC_qda <- classification(MDC, 0)
+
+MD_lgst <- classification(MediatorData, 1)
+MDC_lgst <- classification(MDC, 1)
+
+##############################################################
+####### 7. Making box plots of performance metrics
+##############################################################
+
+# ORGANIZING DATA
+
+# Add column to each of the results data frames to specify which model they come from
+MD_qda$Model <- "QDA"
+MD_lgst$Model <- "MLR"
+MDC_lgst$Model <- "MLR+Cov"
+
+# Move row names to a column
+MD_qda$Group <- rownames(MD_qda)
+MD_lgst$Group <- rownames(MD_lgst)
+MDC_lgst$Group <- rownames(MDC_lgst)
+
+# Bind results together into one data frame
+ClassificationSumm <- bind_rows(MD_qda, MD_lgst, MDC_lgst)
+rownames(ClassificationSumm) <- NULL
+
+# Create order for variables
+ClassificationSumm$Model <- factor(ClassificationSumm$Model, levels = c("MLR+Cov", "MLR", "QDA"))
+ClassificationSumm$Group <- factor(ClassificationSumm$Group, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen", "Overall"))
+
+# Because the smoking group returned NaN for PPV with MLR, overall PPV was not calculated.
+# We will present the overall PPV as an average of the other three groups.
+# (0.3617 + 0.1757 + 0.5914) / 3 = 0.3763
+
+ClassificationSumm[10, 4] = 0.3763
+
+# PLOTTING
+
+# Columns to gather
+ColstoGather <-c("Avg_Accuracy", "Avg_Sens", "Avg_Spec", "Avg_NPV", "Avg_PPV", "BalancedAcc")
+
+# Make long data
+ClassificationSummLong <- gather(ClassificationSumm, key = "Metric", value = "Performance", 1:6)
+
+# Rename variables
+ClassificationSummLong[ClassificationSummLong == "Avg_Accuracy"] <- "Accuracy" 
+ClassificationSummLong[ClassificationSummLong == "Avg_Sens"] <- "Sensitivity"
+ClassificationSummLong[ClassificationSummLong == "Avg_Spec"] <- "Specificity"
+ClassificationSummLong[ClassificationSummLong == "Avg_PPV"] <- "Positive Predictive Value"
+ClassificationSummLong[ClassificationSummLong == "Avg_NPV"] <- "Negative Predictive Value"
+ClassificationSummLong[ClassificationSummLong == "BalancedAcc"] <- "Balanced Accuracy"
+
+dev.off()
+
+# Open Device
+pdf("Output Figures/PredictivePerformanceParametersPanel.pdf",
+    colormodel = "cmyk",
+    width = 8,
+    height = 6)
+
+set.seed(0817)
+
+# Graph
+facetgraph <- ggplot(ClassificationSummLong, aes (x = Model, y = Performance)) +
+  theme_bw() +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(aes(fill = Group), size = 6, shape = 21, position = position_jitter(0.15)) +
+  coord_flip() +
+  facet_wrap(~Metric, nrow = 3) +
+  theme(panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.spacing.x = unit(0.5, "cm"),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(size = 20, color = "black", face = "bold", hjust = 0.5),
+        axis.text.x = element_text(size = 16, color = "black"),
+        axis.text.y = element_text(size = 16, color = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 16),
+        legend.title = element_blank()) +
+  scale_fill_manual(values = c("royalblue4", "darkcyan", "limegreen", "yellow", "black")) +
+  ylim(0, 1)
+
+facetgraph
+
+# Close graphical device
+dev.off()

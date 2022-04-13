@@ -95,53 +95,11 @@ CotSig <- data.frame(CotSig$res)
 CotSig <- format(CotSig, scientific = FALSE)
 
 ##############################################################
-####### 2. Serum Liver Panel Table
-##############################################################
-
-# Import data table
-LiverPanelData <- read.csv("Input Data/2021_06_15 IS Project Liver Data.csv")
-
-# Remove rows with missing values if needed. I just picked one column as reference. 
-LiverPanelData <- LiverPanelData %>% drop_na("ALB")
-
-# Identify factors that will be the columns in your table and specify the order you want them to appear.
-LiverPanelData$Device <- factor(LiverPanelData$Device, 
-                                levels=c("NS/NV", "SM", "3rd Gen", "4th Gen"), 
-                                labels=c("NS/NV", "Smoker", "3rd Gen", "4th Gen"))
-
-# Create row labels for variables of interest
-label(LiverPanelData$ALB) <- "ALB (g/L)"
-label(LiverPanelData$ALP) <- "ALP (U/L)"
-label(LiverPanelData$ALT) <- "ALT (U/L)"
-label(LiverPanelData$AST) <- "AST (U/L)"
-label(LiverPanelData$DBIL) <- "DBIL (mg/dL)"
-label(LiverPanelData$GGT) <- "GGT (U/L)"
-label(LiverPanelData$TBIL) <- "TBIL (mg/dL)"
-
-# Create a function for the summary stats you want on your table.
-my.render.cont.mean.sem <- function(x) {
-  s <- stats.default(x)
-  s$SEM <- with(s, SD/sqrt(N))
-  with(stats.apply.rounding(s), c("",
-                                  "Mean (SEM)"=sprintf("%s (%s)", MEAN, SEM)))
-}
-
-# Make table
-table1(~ ALP + ALT + AST +  GGT + DBIL + TBIL + ALB | Device, 
-       data = LiverPanelData,
-       render.continuous = my.render.cont.mean.sem,
-       render.missing = NULL,
-       overall = NULL)
-
-# To export table cmd+a the table in Rstudio viewer -> cmd+c -> paste Special in MS Word -> chose .html format
-# Added a row for number above or below reference limit manually in Word based on cutoffs provided by the core.
-
-##############################################################
-####### 3. Sputum Cell Differentials
+####### 2. Sputum Cell Differentials
 ##############################################################
 
 ##############################################################
-####### 3.1 Summary Table and Crude Analysis
+####### 2.1 Summary Table and Crude Analysis
 ##############################################################
 
 # Import data table as data frame and make Subject IDs row labels.
@@ -151,15 +109,6 @@ DiffData <- data.frame(DiffData[, -1], row.names = DiffData$Subject_ID)
 # Remove rows with NA values for sputum characteristics (indicates no cell differential available)
 DiffData <- na.omit(DiffData)
 
-# Global average for percent squamous (to report if needed)
-squamous <- stats.default(DiffData$PercSquam)
-mean.squamous <- squamous$MEAN
-sem.squamous <- squamous$SD/sqrt(squamous$N)
-
-# Remove total cell count, select weight as they are dependent on the person processing the sample
-# Remove % squamous as it is a marker of sample quality/contamination and not of biological importance
-DiffData <- subset(DiffData, select = -c(SampleWeight, TCC, PercSquam))
-
 # Import device information for each subject
 MediatorData_Devices <- data.frame(read_excel("Input Data/2021_06_29 IS Project Mediators.xlsx"))
 MediatorData_Devices <- data.frame(MediatorData_Devices$Device, row.names = MediatorData_Devices$Subject_ID)
@@ -168,10 +117,23 @@ colnames(MediatorData_Devices) <- "Device"
 # Merge data frames
 DiffData <- transform(merge(MediatorData_Devices, DiffData, by = 0), row.names=Row.names, Row.names = NULL)
 
+# Global average for percent squamous (to report if needed)
+squamous <- stats.default(DiffData$PercSquam)
+mean.squamous <- squamous$MEAN
+sem.squamous <- squamous$SD/sqrt(squamous$N)
+
+DiffData_Squam_Counts <- DiffData %>% group_by(Device) %>% 
+  summarize(n_gt80 = sum(PercSquam > 80))
+
+# Remove total cell count, select weight as they are dependent on the person processing the sample
+# Remove % squamous as it is a marker of sample quality/contamination and not of biological importance
+DiffData <- subset(DiffData, select = -c(SampleWeight, TCC, PercSquam))
+
 # Identify factors that will be the columns in your table and specify the order you want them to appear.
 DiffData$Device <- factor(DiffData$Device, 
                           levels=c("NS/NV", "SM", "3rd Gen", "4th Gen"), 
                           labels=c("NS/NV", "Smoker", "3rd Gen", "4th Gen"))
+
 
 # Create row labels for variables of interest
 label(DiffData$CellsPerMG) <- "Cells/mg"
@@ -198,6 +160,14 @@ DiffNorm$p.value.adj <- p.adjust(DiffNorm$p.value, "BH")
 
 # Add column for normality conclusion
 DiffNorm <- DiffNorm %>% mutate(normal = ifelse(p.value.adj < 0.05, F, T))
+
+# Create a function for the summary stats you want on your table.
+my.render.cont.mean.sem <- function(x) {
+  s <- stats.default(x)
+  s$SEM <- with(s, SD/sqrt(N))
+  with(stats.apply.rounding(s), c("",
+                                  "Mean (SEM)"=sprintf("%s (%s)", MEAN, SEM)))
+}
 
 # Make table. This code requires the my.render.cont.mean.sem function defined above.
 table1(~ CellsPerMG + MacPerMG + PercMac + PMNPerMG + PercPMN + EosPerMG + PercEos + LymPerMG + PercLym + BronchPerMG + PercBronch | Device, 
@@ -238,7 +208,7 @@ DiffDunnRes <- bind_rows(CellsPerMG, PercPMN, PMNPerMG, PercMac, MacPerMG, PercE
 DiffDunnResTrimmed <- filter(DiffDunnRes, p.adj.signif != "ns")
 
 ##############################################################
-####### 3.2 ANCOVA
+####### 2.2 ANCOVA
 ##############################################################
 
 ## DATA SETUP
@@ -411,11 +381,11 @@ AgeSigMetrics
 # Kruskal-Wallis followed by Dunn's multiple comparison test will be used in the paper. 
 
 ##############################################################
-####### 4. Soluble Mediators
+####### 3. Soluble Mediators
 ##############################################################
 
 ##############################################################
-####### 4.1 Soluble Mediator Table and Crude Analysis
+####### 3.1 Soluble Mediator Table and Crude Analysis
 ##############################################################
 
 # Import data table as data frame and make Subject IDs row labels.
@@ -494,7 +464,7 @@ for (i in 1:43) {
 MediatorDunnResTrimmed <- filter(MediatorDunnRes, p.adj.signif != "ns")
 
 ##############################################################
-####### 4.2 ANCOVA
+####### 3.2 ANCOVA
 ##############################################################
 
 ## DATA SETUP
@@ -738,83 +708,25 @@ for (i in 5:ncol(DeviceMediatorsLog)) {
 # Convert data into a form that can be used as input for faceting
 DeviceMediatorsLogLong <- gather(DeviceMediatorsLog, key = "Mediator", value = "Log2Concentration", DeviceSigMediators)
 
-# Create an object that summarizes the metrics to be graphed (mean +/- SEM)
-Graph_Data <- DeviceMediatorsLogLong %>%
-  group_by(Device, Mediator) %>% 
-  summarize(mean = mean(Log2Concentration),
-            sd = sd(Log2Concentration), count = n(),
-            se = sd/sqrt(count))
-
-# Specify that the class of the summary object should be a data frame.
-Graph_Data <- data.frame(Graph_Data)
-
 # Create panel of graphs using fact_wrap
+dev.off()
+
 theme_set(theme_bw())
 
-pdf("Output Figures/SolubleMediatorFigurePanel.pdf",
+pdf("Output Figures/SolubleMediatorFigurePanelJitter.pdf",
     colormodel = "cmyk",
     bg = "transparent",
     width = 7.3,
     height = 8.1)
 
-facetgraph <- ggplot(Graph_Data, aes (x = Device, y = mean, fill = Device)) +
-  geom_bar(stat = 'identity') +
-  geom_errorbar(aes(x = Device, ymin = mean - se, ymax = mean + se), width = 0.4, alpha = 0.9, size = 0.5) +
-  labs(y = "Log2 (Concentration (pg/mL))") +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.5))) +
-  facet_wrap(~Mediator, scales = "free_y", nrow = 4) +
-  theme(strip.text = element_text(size = 10),
-        axis.text.x = element_text(size = 9, color = "black"),
-        axis.text.y = element_text(size = 8, color = "black"),
-        axis.title.y = element_text(size = 10),
-        axis.title.x = element_blank(),
-        legend.position = "none",
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank()) +
-  scale_fill_viridis(begin = 0.25, end = 1, discrete = TRUE)
-
-facetgraph
-
-dev.off()
-
-# Exported as 7.3 x 8.1 PDF
-# Significance markings added manually in Adobe Illustrator based on DunnetRes and TukeyRes summary table. 
-
-## GRAPHING FOR NCSOT POSTER
-
-# Data Prep
-
-# Select Mediators to Show
-MediatorsForPoster <- c("CRP", "IFNg", "MCP1", "MMP2", "sICAM1", "sVCAM1", "Uteroglobin", "VEGF")
-
-# Filter data to only those significant for Device in ANCOVA
-MediatorsForPosterLog <- select(AllDataLog, all_of(MediatorsForPoster))
-
-# Merge demographic data back in
-MediatorsForPosterLog <- transform(merge(MetaData, MediatorsForPosterLog, by = 0), row.names=Row.names, Row.names = NULL)
-
-# Set devices as factors
-MediatorsForPosterLog$Device <- factor(MediatorsForPosterLog$Device, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen"))
-
-# Make long data
-MediatorsForPosterLogLong <- gather(MediatorsForPosterLog, key = "Mediator", value = "Log2Concentration", MediatorsForPoster)
-
-pdf("SolubleMediatorFigurePanel2.pdf",
-    colormodel = "cmyk",
-    bg = "transparent",
-    width = 20,
-    height = 3)
-
-set.seed(0817)
-
-postergraphs <- ggplot(MediatorsForPosterLogLong, aes (x = Device, y = Log2Concentration, fill = Device)) +
+figurepanel <- ggplot(DeviceMediatorsLogLong, aes (x = Device, y = Log2Concentration, fill = Device)) +
   geom_boxplot(color = "black",
                outlier.shape = NA) +
   geom_jitter(position = position_jitter(0.15),
               shape = 20) +
   labs(y = "Log2 (Concentration (pg/mL))") +
   scale_y_continuous(expand = expansion(mult = c(0.25, 0.7))) +
-  facet_wrap(~Mediator, scales = "free_y", nrow = 1) +
+  facet_wrap(~Mediator, scales = "free_y", nrow = 4) +
   theme(strip.text = element_text(size = 12, face = "bold"),
         axis.text.x = element_text(size = 9, color = "black"),
         axis.text.y = element_text(size = 8, color = "black"),
@@ -825,9 +737,6 @@ postergraphs <- ggplot(MediatorsForPosterLogLong, aes (x = Device, y = Log2Conce
         panel.grid.minor = element_blank()) +
   scale_fill_viridis(begin = 0.25, end = 1, discrete = TRUE)
 
-postergraphs
+figurepanel
 
-
-# Close graphical device
 dev.off()
-

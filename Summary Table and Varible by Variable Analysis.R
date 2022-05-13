@@ -14,7 +14,7 @@ library(ggplot2) # for graphing
 library(viridis) # for graphing
 
 ##############################################################
-####### 1. Demographic Table
+####### 1. Demographic Table (TABLE 1)
 ##############################################################
 
 # Import data table
@@ -99,7 +99,7 @@ CotSig <- format(CotSig, scientific = FALSE)
 ##############################################################
 
 ##############################################################
-####### 2.1 Summary Table and Crude Analysis
+####### 2.1 Summary Table and Crude Analysis (TABLE 2)
 ##############################################################
 
 # Import data table as data frame and make Subject IDs row labels.
@@ -385,7 +385,7 @@ AgeSigMetrics
 ##############################################################
 
 ##############################################################
-####### 3.1 Soluble Mediator Table and Crude Analysis
+####### 3.1 Soluble Mediator Table and Crude Analysis (TABLE E2)
 ##############################################################
 
 # Import data table as data frame and make Subject IDs row labels.
@@ -464,7 +464,7 @@ for (i in 1:43) {
 MediatorDunnResTrimmed <- filter(MediatorDunnRes, p.adj.signif != "ns")
 
 ##############################################################
-####### 3.2 ANCOVA
+####### 3.2 ANCOVA (TABLE E3)
 ##############################################################
 
 ## DATA SETUP
@@ -703,7 +703,9 @@ for (i in 5:ncol(DeviceMediatorsLog)) {
 
 # Examined p values only for 3rd versus 4th gen users only.
 
-# GRAPHING DEVICE SIGNIFICANT MEDIATORS
+##############################################################
+####### 4. Graphing Device-Significant Mediators (FIGURE 2)
+##############################################################
 
 # Convert data into a form that can be used as input for faceting
 DeviceMediatorsLogLong <- gather(DeviceMediatorsLog, key = "Mediator", value = "Log2Concentration", DeviceSigMediators)

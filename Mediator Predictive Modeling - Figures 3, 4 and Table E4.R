@@ -107,7 +107,7 @@ MediatorDataSummary <- data.frame(MediatorDataSummary[,-1], row.names = Mediator
 # Make heat map
 dev.off()
 
-pdf("Output Figures/Fig3_SummaryHeatmapMLMediators.pdf",
+pdf("Output Figures/Figure3_SummaryHeatmapMLMediators.pdf",
     colormodel = "cmyk")
 
 heatmap <-pheatmap(t(MediatorDataSummary),
@@ -322,7 +322,7 @@ ClassificationSummLong[ClassificationSummLong == "BalancedAcc"] <- "Balanced Acc
 dev.off()
 
 # Open Device
-pdf("Output Figures/PredictivePerformanceParametersPanel.pdf",
+pdf("Output Figures/Figure4_PredictivePerformanceParametersPanel.pdf",
     colormodel = "cmyk",
     width = 8,
     height = 6)

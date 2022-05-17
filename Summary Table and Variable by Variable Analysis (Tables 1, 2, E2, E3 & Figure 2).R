@@ -440,6 +440,26 @@ table1(~ Albumin + bFGF + CRP + dsDNA + Eotaxin + Eotaxin3 + Flt1 + GMCSF +
        extra.col = list(`P-value` = pvalue),
        overall = NULL)
 
+## To add adjusted p-value column
+cytokines = colnames(MediatorData)[2:44]
+
+cytokine_kruskal_test_pvalues = data.frame()
+for(i in 1:length(cytokines)){
+  kruskal_test = kruskal.test(as.formula(paste0(cytokines[i],"~", "Device")), data = MediatorData)
+  kruskal_test_values = cbind("Cytokine" = cytokines[i], "P Value" = kruskal_test$p.value)
+  cytokine_kruskal_test_pvalues = rbind(cytokine_kruskal_test_pvalues, kruskal_test_values)
+}
+
+cytokine_kruskal_test_pvalues$`P Adjust` = p.adjust(cytokine_kruskal_test_pvalues$`P Value`, method = "BH")
+
+cytokine_kruskal_test_pvalues$`P Value` <- as.numeric(cytokine_kruskal_test_pvalues$`P Value`)
+cytokine_kruskal_test_pvalues$`P Adjust` <- as.numeric(cytokine_kruskal_test_pvalues$`P Adjust`)
+
+cytokine_kruskal_test_pvalues$`P Value` <- round(cytokine_kruskal_test_pvalues$`P Value`, digits = 3)
+cytokine_kruskal_test_pvalues$`P Adjust` <- round(cytokine_kruskal_test_pvalues$`P Adjust`, digits = 3)
+
+write.csv(cytokine_kruskal_test_pvalues, file = "Output Figures/TableE2_Mediator_pvalues.csv")
+
 ## DUNN'S NON-PARAMETRIC MULTIPLE COMPARISONS TEST
 
 # Create group variable and variables of interest to be tested
@@ -466,6 +486,7 @@ MediatorDunnResTrimmed <- filter(MediatorDunnRes, p.adj.signif != "ns")
 ##############################################################
 ####### 3.2 ANCOVA (TABLE E3)
 ##############################################################
+
 
 ## DATA SETUP
 

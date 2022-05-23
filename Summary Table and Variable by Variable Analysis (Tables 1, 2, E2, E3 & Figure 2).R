@@ -458,7 +458,7 @@ cytokine_kruskal_test_pvalues$`P Adjust` <- as.numeric(cytokine_kruskal_test_pva
 cytokine_kruskal_test_pvalues$`P Value` <- round(cytokine_kruskal_test_pvalues$`P Value`, digits = 3)
 cytokine_kruskal_test_pvalues$`P Adjust` <- round(cytokine_kruskal_test_pvalues$`P Adjust`, digits = 3)
 
-write.csv(cytokine_kruskal_test_pvalues, file = "Output Figures/TableE2_Mediator_pvalues.csv")
+write.csv(cytokine_kruskal_test_pvalues, file = "Output Figures/TableE2_Mediator_Kruskal_pvalues.csv")
 
 ## DUNN'S NON-PARAMETRIC MULTIPLE COMPARISONS TEST
 
@@ -639,6 +639,22 @@ ANCOVAres_mediators <- data.frame(t(ANCOVAres_mediators))
 # This table is reported in the paper.
 ANCOVAres_mediators <- subset(ANCOVAres_mediators, select = c(Device, Sex, Age, Race))
 ANCOVAres_mediators <- round(ANCOVAres_mediators, 4)
+
+# Add adjusted p-values
+ANCOVAres_mediators$`Device P Adjust` = p.adjust(ANCOVAres_mediators$Device, method = "BH")
+ANCOVAres_mediators$`Device P Adjust` <- round(ANCOVAres_mediators$`Device P Adjust`, digits = 4)
+
+ANCOVAres_mediators$`Sex P Adjust` = p.adjust(ANCOVAres_mediators$Sex, method = "BH")
+ANCOVAres_mediators$`Sex P Adjust` <- round(ANCOVAres_mediators$`Sex P Adjust`, digits = 4)
+
+ANCOVAres_mediators$`Age P Adjust` = p.adjust(ANCOVAres_mediators$Age, method = "BH")
+ANCOVAres_mediators$`Age P Adjust` <- round(ANCOVAres_mediators$`Age P Adjust`, digits = 4)
+
+ANCOVAres_mediators$`Race P Adjust` = p.adjust(ANCOVAres_mediators$Race, method = "BH")
+ANCOVAres_mediators$`Race P Adjust` <- round(ANCOVAres_mediators$`Race P Adjust`, digits = 4)
+
+# Save table of results
+write.csv(ANCOVAres_mediators, file = "Output Figures/TableE3_Mediator_ANCOVA_pvalues.csv")
 
 # Summarize Results
 DeviceSigMediators <- as.vector(row.names(filter(ANCOVAres_mediators, Device < 0.05)))

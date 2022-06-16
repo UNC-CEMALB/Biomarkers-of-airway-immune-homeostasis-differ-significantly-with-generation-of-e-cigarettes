@@ -675,7 +675,7 @@ DeviceMediatorsLog <- transform(merge(MetaData, DeviceMediatorsLog, by = 0), row
 # Set devices as factors
 DeviceMediatorsLog$Device <- factor(DeviceMediatorsLog$Device, levels = c("NS/NV", "SM", "3rd Gen", "4th Gen"))
 
-# DUNNETT'S WITH CONTROL
+# DUNNETT'S WITH CONTROL - NOT USED FOR BODY OF PAPER BUT INCLUDED IN CASE OF INTEREST
 
 # Create empty data frame
 DunnettRes <- data.frame()
@@ -705,10 +705,12 @@ for (i in 5:ncol(DeviceMediatorsLog)) {
   DunnettRes <- transform(merge(DunnettRes, res_df, by = 0), row.names=Row.names, Row.names = NULL)
 }
 
+write.csv(DunnettRes, "DunnetRes", sep = ".\t")
+
 # Optional code for applying p-value adjustment (I did not use this)
 # DunnettResAdj = data.frame(apply(DunnettRes, 2, p.adjust, method = "BH"))
 
-# TUKEY'S ALL COMPARISONS
+# TUKEY'S ALL COMPARISONS - USED IN PAPER
 
 # Create empty data frame
 TukeyRes <- data.frame()
@@ -738,7 +740,8 @@ for (i in 5:ncol(DeviceMediatorsLog)) {
   TukeyRes <- transform(merge(TukeyRes, res_df, by = 0), row.names=Row.names, Row.names = NULL)
 }
 
-# Examined p values only for 3rd versus 4th gen users only.
+# View results and annotate figure
+TukeyRes
 
 ##############################################################
 ####### 4. Graphing Device-Significant Mediators (FIGURE 2)

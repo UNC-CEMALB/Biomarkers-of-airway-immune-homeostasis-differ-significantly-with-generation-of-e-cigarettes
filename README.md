@@ -6,4 +6,4 @@
 > All analyses in this folder are designated by their figure number or table number in the manuscript in parantheses.
 
 
-This script was generated to support the manuscript titled 'Biomarkers of airway immune homeostasis differ significantly with generation of e-cigarettes' published in 2022 (PMID: 35731626).
+This script was generated to support the manuscript titled 'Biomarkers of airway immune homeostasis differ significantly with generation of e-cigarettes' published in 2022 in the American Journal of Respiratory and Critical Care Medicine. doi: https://doi.org/10.1164/rccm.202202-0373OC; PMID: 35731626
